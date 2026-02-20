@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "jit-tool-synthesis": {
+      "command": "node",
+      "args": ["/path/to/jit-tool-synthesis/dist/server.js"],
+      "env": {
+        "OPENROUTER_API_KEY": "sk-or-...",
+        "SYNTHESIZER_MODEL": "openrouter/anthropic/claude-3-5-sonnet-20241022"
+      }
+    }
+  }
+}
