@@ -42,4 +42,9 @@ export class ToolRegistry {
       .filter(f => f.endsWith(".json"))
       .map(f => f.replace(".json", ""));
   }
+
+  has(name: string): boolean {
+    const filePath = path.join(this.dir, `${name}.json`);
+    return fs.existsSync(filePath);
+  }
 }

@@ -1,105 +1,146 @@
+import { OpenAI } from "openai";
+import type { GeneratedTool } from "./registry.js";
+
 interface SynthesisRequest {
   description: string;
   exampleInput?: string;
   exampleOutput?: string;
 }
 
-export interface GeneratedTool {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-  handlerCode: string;
-}
+// Blocked patterns for security
+const BLOCKED_PATTERNS = [
+  /process\./,
+  /require\s*\(/,
+  /import\s+/,
+  /eval\s*\(/,
+  /Function\s*\(/,
+  /while\s*\(\s*true\s*\)/,
+  /for\s*\(\s*;\s*;\s*\)/,
+  /globalThis/,
+  /Deno\./,
+  /Bun\./,
+];
 
-const SYSTEM_PROMPT = `You are a tool generator. Given a description of a capability,
-you produce a complete tool definition.
+const SYSTEM_PROMPT = `You are a tool generator. Given a capability description, produce a complete tool definition as a single JSON object with NO other text, NO markdown fences, NO explanation.
 
-You MUST respond with valid JSON containing exactly these fields:
-
+Required fields:
 {
   "name": "snake_case_tool_name",
-  "description": "Clear one-line description of what the tool does",
+  "description": "Clear one-line description",
   "inputSchema": {
     "type": "object",
-    "properties": {
-      "param_name": { "type": "string|number|boolean|array|object", "description": "..." }
-    },
-    "required": ["param_name"]
+    "properties": { "param": { "type": "string|number|boolean", "description": "..." } },
+    "required": ["param"]
   },
-  "handlerCode": "... JavaScript function body ..."
+  "handlerCode": "var result = params.x + params.y; return { sum: result };"
 }
 
-IMPORTANT: handlerCode must be a regular string, NOT a template literal. Use regular quotes " and escape any quotes inside with \\". Do NOT use backticks.
-
-Rules for handlerCode:
-- It receives a 'params' object matching the inputSchema
-- It must be a self-contained function body (no imports, no require)
-- It has access to: Math, Date, JSON, Array, Object, String, Number, RegExp, Map, Set
-- It does NOT have access to: fs, http, fetch, process, eval, Function constructor
-- It must return a value (object, string, number, array)
-- Keep it focused and under 100 lines
-
-Example — for "Calculate body mass index":
-{"name":"bmi_calculator","description":"Calculate BMI from weight (kg) and height (m)","inputSchema":{"type":"object","properties":{"weight_kg":{"type":"number","description":"Weight in kilograms"},"height_m":{"type":"number","description":"Height in meters"}},"required":["weight_kg","height_m"]},"handlerCode":"var bmi = params.weight_kg / (params.height_m * params.height_m); var category = bmi < 18.5 ? 'underweight' : bmi < 25 ? 'normal' : bmi < 30 ? 'overweight' : 'obese'; return { bmi: Math.round(bmi * 10) / 10, category: category };"}`;
+handlerCode rules:
+- Receives a "params" object matching inputSchema
+- Self-contained function body (no imports, no require, no fetch)
+- Available globals: Math, Date, JSON, Array, Object, String, Number, RegExp, Map, Set, parseInt, parseFloat
+- NOT available: fs, http, fetch, process, eval, Function, require, import
+- Must return a value
+- Use var/let, not const for top-level (some sandboxes are strict)
+- Use regular strings, NOT template literals
+- Keep under 80 lines
+- Handle edge cases (missing params, division by zero, etc.)`;
 
 export class Synthesizer {
-  private apiKey: string;
+  private client: OpenAI;
   private model: string;
 
-  constructor(apiKey: string, model: string) {
-    this.apiKey = apiKey;
+  constructor(apiKey: string, baseUrl: string, model: string) {
+    this.client = new OpenAI({
+      apiKey,
+      baseURL: baseUrl,
+      defaultHeaders: {
+        "HTTP-Referer": "https://github.com/EyeSeeThru/jit-tool-synthesis",
+        "X-Title": "JIT Tool Synthesis",
+      },
+    });
     this.model = model;
   }
 
   async generate(request: SynthesisRequest): Promise<GeneratedTool> {
-    let userPrompt = `Generate a tool for: ${request.description}`;
-    if (request.exampleInput) userPrompt += `\n\nExample input: ${request.exampleInput}`;
-    if (request.exampleOutput) userPrompt += `\nExpected output format: ${request.exampleOutput}`;
+    var userPrompt = "Generate a tool for: " + request.description;
+    if (request.exampleInput) userPrompt += "\n\nExample input: " + request.exampleInput;
+    if (request.exampleOutput) userPrompt += "\nExpected output: " + request.exampleOutput;
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.apiKey}`,
-        "HTTP-Referer": "https://github.com/EyeSeeThru/jit-tool-synthesis",
-        "X-Title": "JIT Tool Synthesis",
-      },
-      body: JSON.stringify({
-        model: this.model,
-        max_tokens: 2048,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-      }),
+    const response = await this.client.chat.completions.create({
+      model: this.model,
+      max_tokens: 2048,
+      temperature: 0,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
-    }
-
-    const data = await response.json() as any;
-    const text = data.choices[0]?.message?.content || "";
-    
-    // Try to extract JSON from response
-    let jsonStr = text.trim();
-    
-    // Remove markdown code fences
-    jsonStr = jsonStr.replace(/^```json\s*/g, "").replace(/^```\s*/g, "").replace(/```$/g, "");
-    
-    // Try to find JSON object
-    const firstBrace = jsonStr.indexOf("{");
-    const lastBrace = jsonStr.lastIndexOf("}");
-    if (firstBrace === -1 || lastBrace === -1) {
-      throw new Error("Synthesizer did not return valid JSON");
-    }
-    jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
-
-    const tool = JSON.parse(jsonStr) as GeneratedTool;
-    if (!tool.name || !tool.description || !tool.inputSchema || !tool.handlerCode) {
-      throw new Error("Generated tool is missing required fields");
-    }
+    const text = response.choices[0]?.message?.content || "";
+    const tool = this.parseToolJson(text);
+    this.validateTool(tool);
     return tool;
+  }
+
+  private parseToolJson(text: string): GeneratedTool {
+    var cleaned = text.trim();
+
+    // Strip markdown code fences
+    cleaned = cleaned.replace(/^```(?:json)?\s*/g, "").replace(/\s*```$/g, "");
+
+    // Find the JSON object — match balanced braces
+    var depth = 0;
+    var start = -1;
+    var end = -1;
+    for (var i = 0; i < cleaned.length; i++) {
+      if (cleaned[i] === "{") {
+        if (depth === 0) start = i;
+        depth++;
+      } else if (cleaned[i] === "}") {
+        depth--;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+
+    if (start === -1 || end === -1) {
+      throw new Error("No valid JSON object found in LLM response");
+    }
+
+    return JSON.parse(cleaned.substring(start, end + 1));
+  }
+
+  private validateTool(tool: GeneratedTool): void {
+    if (!tool.name || typeof tool.name !== "string") {
+      throw new Error("Generated tool missing 'name'");
+    }
+    if (!tool.description || typeof tool.description !== "string") {
+      throw new Error("Generated tool missing 'description'");
+    }
+    if (!tool.inputSchema || typeof tool.inputSchema !== "object") {
+      throw new Error("Generated tool missing 'inputSchema'");
+    }
+    if (!tool.handlerCode || typeof tool.handlerCode !== "string") {
+      throw new Error("Generated tool missing 'handlerCode'");
+    }
+
+    // Check for dangerous patterns
+    for (const pattern of BLOCKED_PATTERNS) {
+      if (pattern.test(tool.handlerCode)) {
+        throw new Error(
+          "Generated code contains blocked pattern: " + pattern.source
+        );
+      }
+    }
+
+    // Verify the code at least parses
+    try {
+      new Function("params", tool.handlerCode);
+    } catch (e) {
+      throw new Error(
+        "Generated code has syntax errors: " +
+        (e instanceof Error ? e.message : String(e))
+      );
+    }
   }
 }
