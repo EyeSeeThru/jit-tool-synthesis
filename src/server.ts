@@ -5,21 +5,19 @@ import { Synthesizer } from "./synthesizer.js";
 import { ToolRegistry, GeneratedTool } from "./registry.js";
 import { ApprovalQueue } from "./approval.js";
 import { Sandbox } from "./sandbox.js";
+import { configManager } from "./config.js";
 
-// Determine API configuration
-const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || "";
-const baseUrl = process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1";
-const model = process.env.SYNTHESIZER_MODEL || "anthropic/claude-3-5-sonnet-20241022";
-
-if (!apiKey) {
-  console.error("No API key found. Set OPENROUTER_API_KEY or OPENAI_API_KEY.");
+// Initialize config
+const config = configManager.get();
+if (!config.apiKey) {
+  console.error("No API key found. Set LLM_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY.");
   process.exit(1);
 }
 
 const registry = new ToolRegistry("./tools");
 const approvals = new ApprovalQueue();
 const sandbox = new Sandbox();
-const synthesizer = new Synthesizer(apiKey, baseUrl, model);
+const synthesizer = new Synthesizer(config.apiKey, config.baseUrl, config.model);
 
 const server = new McpServer({
   name: "jit-tool-synthesis",
@@ -261,6 +259,56 @@ server.registerTool(
           null,
           2
         ),
+      }],
+    };
+  }
+);
+
+server.registerTool(
+  "get_config",
+  {
+    title: "Get LLM configuration",
+    description: "Show current LLM provider, model, and base URL settings.",
+    inputSchema: {},
+  },
+  async () => {
+    const safe = configManager.getSafe();
+    return {
+      content: [{ type: "text", text: JSON.stringify(safe, null, 2) }],
+    };
+  }
+);
+
+server.registerTool(
+  "set_config",
+  {
+    title: "Set LLM configuration",
+    description: "Change the LLM provider, model, or base URL at runtime. Changes take effect immediately.",
+    inputSchema: {
+      base_url: z.string().optional().describe("Base URL, e.g. https://openrouter.ai/api/v1"),
+      model: z.string().optional().describe("Model name, e.g. anthropic/claude-3-5-sonnet-20241022"),
+    },
+  },
+  async ({ base_url, model }) => {
+    const current = configManager.get();
+    const newConfig: any = {};
+    if (base_url) newConfig.baseUrl = base_url;
+    if (model) newConfig.model = model;
+    
+    configManager.set(newConfig);
+    
+    // Recreate synthesizer with new config
+    const newCfg = configManager.get();
+    synthesizer.updateConfig(newCfg.apiKey, newCfg.baseUrl, newCfg.model);
+    
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          status: "updated",
+          baseUrl: newCfg.baseUrl,
+          model: newCfg.model,
+        }, null, 2),
       }],
     };
   }

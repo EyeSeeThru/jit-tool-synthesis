@@ -23,11 +23,23 @@ This system generates TypeScript tools dynamically using an LLM, requires human 
 
 | File | Purpose |
 |------|---------|
-| `synthesizer.ts` | Generates TypeScript code using OpenRouter LLM |
+| `synthesizer.ts` | Generates tool code using any OpenAI-compatible LLM |
 | `approval.ts` | Human-in-the-loop gate — requires approval before execution |
 | `sandbox.ts` | Safe execution environment for generated code |
 | `registry.ts` | Tool persistence and storage |
 | `server.ts` | MCP server integration |
+| `config.ts` | Runtime configuration management |
+
+## Provider-Agnostic
+
+This tool works with **any** OpenAI-compatible LLM API:
+
+- **OpenRouter** — 100+ models (Claude, GPT, Llama, etc.)
+- **OpenAI** — GPT-4, GPT-4o
+- **Ollama** — Local models (Llama, Qwen, etc.)
+- **LM Studio** — Local models with GUI
+- **Groq** — Fast inference
+- **Any** other OpenAI-compatible API
 
 ## Setup
 
@@ -37,9 +49,31 @@ npm install
 
 # Copy environment template
 cp .env.example .env
+```
 
-# Add your OpenRouter API key to .env
-OPENROUTER_API_KEY=your_key_here
+### Configure Your LLM Provider
+
+Edit `.env` with your provider details:
+
+```bash
+# Option 1: OpenRouter (default - 100+ models)
+LLM_API_KEY=your-openrouter-key
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=anthropic/claude-3-5-sonnet-20241022
+
+# Option 2: OpenAI direct
+LLM_API_KEY=sk-...
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-4o
+
+# Option 3: Ollama (local)
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=llama3.1
+
+# Option 4: Groq
+LLM_API_KEY=gsk_...
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=llama-3.1-70b-versatile
 ```
 
 ## Usage
@@ -47,48 +81,61 @@ OPENROUTER_API_KEY=your_key_here
 ### Start the MCP Server
 
 ```bash
-npm run dev
+npm run build
+node dist/server.js
 ```
 
-### Claude Desktop Integration
+### Runtime Configuration
 
-Import the config:
+You can change the LLM provider without restarting:
 
 ```bash
-# Copy Claude Desktop config
-cat claude-desktop-config.json
+# View current config
+get_config
+
+# Change model at runtime
+set_config model=openai/gpt-4o
 ```
 
-Add the JSON to your Claude Desktop settings under `mcpServers`.
+## MCP Tools
 
-### CLI Commands
-
-```bash
-# Generate and approve a tool
-npm run cli -- synthesize "Create a weather tool that fetches from wttr.in"
-
-# List available tools
-npm run cli -- list
-
-# Execute a tool
-npm run cli -- execute <tool-id>
-```
+| Tool | Description |
+|------|-------------|
+| `synthesize_tool` | Generate a new tool from natural language |
+| `approve_tool` | Activate a pending tool |
+| `reject_tool` | Discard a pending tool |
+| `execute_tool` | Run an approved tool |
+| `list_generated_tools` | List all approved tools |
+| `get_tool` | View tool details |
+| `remove_tool` | Delete a tool |
+| `list_pending` | List tools waiting for approval |
+| `get_config` | View LLM configuration |
+| `set_config` | Change LLM provider/model at runtime |
 
 ## Workflow
 
 1. **Request** — User asks for a tool (e.g., "create a weather fetcher")
-2. **Synthesize** — LLM generates TypeScript code
+2. **Synthesize** — LLM generates tool code
 3. **Approve** — Human reviews and approves the code
 4. **Execute** — Tool runs in sandboxed environment
 5. **Store** — Approved tools persist in registry
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `OPENROUTER_API_KEY` | API key for LLM tool generation |
-| `PORT` | Server port (default: 3000) |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LLM_API_KEY` | API key for your provider | (required for cloud) |
+| `LLM_BASE_URL` | API endpoint | https://openrouter.ai/api/v1 |
+| `LLM_MODEL` | Model to use | anthropic/claude-3-5-sonnet-20241022 |
+
+Also supported (legacy): `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `SYNTHESIZER_MODEL`
+
+## Security
+
+- Generated code runs in isolated VM sandbox
+- Blocked patterns prevent dangerous code (process, require, eval, etc.)
+- API keys not stored in config file
 
 ## Status
 
-**In Progress** — MVP complete, end-to-end testing in progress.
+**Production Ready** — Phase 1 complete.

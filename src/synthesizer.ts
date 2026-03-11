@@ -62,6 +62,18 @@ export class Synthesizer {
     this.model = model;
   }
 
+  updateConfig(apiKey: string, baseUrl: string, model: string): void {
+    this.client = new OpenAI({
+      apiKey,
+      baseURL: baseUrl,
+      defaultHeaders: {
+        "HTTP-Referer": "https://github.com/EyeSeeThru/jit-tool-synthesis",
+        "X-Title": "JIT Tool Synthesis",
+      },
+    });
+    this.model = model;
+  }
+
   async generate(request: SynthesisRequest): Promise<GeneratedTool> {
     var userPrompt = "Generate a tool for: " + request.description;
     if (request.exampleInput) userPrompt += "\n\nExample input: " + request.exampleInput;
