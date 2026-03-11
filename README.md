@@ -1,4 +1,4 @@
-# JIT Tool Synthesis v2
+# JIT Tool Synthesis v3
 
 LLM-powered on-demand tool generation with human-in-the-loop approval and safe execution.
 
