@@ -35,7 +35,7 @@ This system generates TypeScript tools dynamically using an LLM, requires human 
 This tool works with **any** OpenAI-compatible LLM API:
 
 - **OpenRouter** — 100+ models (Claude, GPT, Llama, etc.)
-- **OpenAI** — GPT-4, GPT-4o
+- **OpenAI** — GPT-5.4, Codex 5.3
 - **Ollama** — Local models (Llama, Qwen, etc.)
 - **LM Studio** — Local models with GUI
 - **Groq** — Fast inference
@@ -59,7 +59,7 @@ Edit `.env` with your provider details:
 # Option 1: OpenRouter (default - 100+ models)
 LLM_API_KEY=your-openrouter-key
 LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_MODEL=anthropic/claude-3-5-sonnet-20241022
+LLM_MODEL=anthropic/claude-4-5-sonnet
 
 # Option 2: OpenAI direct
 LLM_API_KEY=sk-...
