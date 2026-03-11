@@ -4,3 +4,4 @@ dist/
 *.log
 tools/
 run.sh
+.git-hooks/
