@@ -19,18 +19,24 @@ class ConfigManager {
   }
 
   private load(): LLMConfig {
-    // Load from file if exists, otherwise use env vars
+    // Load baseUrl and model from file if exists
+    // API key ALWAYS comes from env vars - never from disk
+    let fileConfig = { baseUrl: "", model: "" };
     if (fs.existsSync(this.configPath)) {
       try {
-        return JSON.parse(fs.readFileSync(this.configPath, "utf-8"));
+        const loaded = JSON.parse(fs.readFileSync(this.configPath, "utf-8"));
+        fileConfig = { 
+          baseUrl: loaded.baseUrl || "", 
+          model: loaded.model || "" 
+        };
       } catch {
-        // Fall back to env vars
+        // Ignore - use defaults
       }
     }
     return {
       apiKey: process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || "",
-      baseUrl: process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1",
-      model: process.env.LLM_MODEL || process.env.SYNTHESIZER_MODEL || "anthropic/claude-3-5-sonnet-20241022",
+      baseUrl: fileConfig.baseUrl || process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1",
+      model: fileConfig.model || process.env.LLM_MODEL || process.env.SYNTHESIZER_MODEL || "anthropic/claude-3-5-sonnet-20241022",
     };
   }
 
@@ -40,10 +46,9 @@ class ConfigManager {
 
   set(newConfig: Partial<LLMConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    // Don't persist API key to disk for security
-    if (!newConfig.apiKey || newConfig.apiKey.length < 10) {
-      fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
-    }
+    // Never persist API key to disk - always read from env
+    const { apiKey, ...safeConfig } = this.config;
+    fs.writeFileSync(this.configPath, JSON.stringify(safeConfig, null, 2));
   }
 
   // Get config without sensitive data (for displaying)

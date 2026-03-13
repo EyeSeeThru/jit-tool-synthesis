@@ -168,6 +168,39 @@ server.registerTool(
 );
 
 server.registerTool(
+  "test_tool",
+  {
+    title: "Test a pending tool",
+    description: "Execute a pending tool with sample params to validate before approval.",
+    inputSchema: {
+      tool_name: z.string().describe("Name of the pending tool to test"),
+      params: z.record(z.unknown()).describe("Sample parameters to test with"),
+    },
+  },
+  async ({ tool_name, params }) => {
+    const pending = approvals.get(tool_name);
+    if (pending) {
+      try {
+        const result = await sandbox.execute(pending.handlerCode, params);
+        return { content: [{ type: "text", text: JSON.stringify({ status: "success", source: "pending", result }, null, 2) }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: JSON.stringify({ status: "failed", source: "pending", error: error instanceof Error ? error.message : String(error) }, null, 2) }], isError: true };
+      }
+    }
+    const tool = registry.load(tool_name);
+    if (tool) {
+      try {
+        const result = await sandbox.execute(tool.handlerCode, params);
+        return { content: [{ type: "text", text: JSON.stringify({ status: "success", source: "approved", result }, null, 2) }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: JSON.stringify({ status: "failed", source: "approved", error: error instanceof Error ? error.message : String(error) }, null, 2) }], isError: true };
+      }
+    }
+    return { content: [{ type: "text", text: `Tool "${tool_name}" not found.` }], isError: true };
+  }
+);
+
+server.registerTool(
   "list_generated_tools",
   {
     title: "List generated tools",

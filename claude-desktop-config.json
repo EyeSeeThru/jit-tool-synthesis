@@ -2,10 +2,11 @@
   "mcpServers": {
     "jit-tool-synthesis": {
       "command": "node",
-      "args": ["/path/to/jit-tool-synthesis/dist/server.js"],
+      "args": ["${HOME}/.openclaw/workspace/jit-tool-synthesis/dist/server.js"],
       "env": {
-        "OPENROUTER_API_KEY": "sk-or-...",
-        "SYNTHESIZER_MODEL": "openrouter/anthropic/claude-3-5-sonnet-20241022"
+        "LLM_API_KEY": "${LLM_API_KEY}",
+        "LLM_BASE_URL": "https://openrouter.ai/api/v1",
+        "LLM_MODEL": "anthropic/claude-3-5-sonnet-20241022"
       }
     }
   }

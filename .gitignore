@@ -6,3 +6,4 @@ tools/
 run.sh
 .git-hooks/
 config.json
+configs/
