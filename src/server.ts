@@ -21,7 +21,7 @@ const synthesizer = new Synthesizer(config.apiKey, config.baseUrl, config.model)
 
 const server = new McpServer({
   name: "jit-tool-synthesis",
-  version: "2.0.0",
+  version: "3.0.0",
 });
 
 // --- Meta-tools ---
