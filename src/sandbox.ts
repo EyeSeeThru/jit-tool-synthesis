@@ -1,36 +1,36 @@
-import vm from "node:vm";
+import { Worker } from "node:worker_threads";
+import { fileURLToPath } from "node:url";
 
-const ALLOWED_GLOBALS = {
-  Math, Date, JSON, Array, Object, String, Number, Boolean, RegExp, Map, Set,
-  parseInt, parseFloat, isNaN, isFinite, undefined, NaN, Infinity,
-  console: { log: () => {}, warn: () => {}, error: () => {} },
-};
+const WORKER_PATH = new URL("./sandbox-worker.js", import.meta.url);
 
 export class Sandbox {
   constructor(private timeoutMs = 5000) {}
 
   async execute(handlerCode: string, params: Record<string, unknown>): Promise<unknown> {
-    const wrappedCode = `(function(params) { "use strict"; ${handlerCode} })`;
-    const context = vm.createContext({ ...ALLOWED_GLOBALS });
+    return new Promise((resolve, reject) => {
+      const worker = new Worker(fileURLToPath(WORKER_PATH), {
+        workerData: { code: handlerCode, params },
+      });
 
-    try {
-      const script = new vm.Script(wrappedCode, { filename: "generated-tool.js" });
-      const handler = script.runInContext(context, { timeout: this.timeoutMs });
-      const result = handler(params);
+      const timer = setTimeout(() => {
+        worker.terminate();
+        reject(new Error(`Execution timed out after ${this.timeoutMs}ms`));
+      }, this.timeoutMs);
 
-      if (result instanceof Promise) {
-        return await Promise.race([
-          result,
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Async timeout")), this.timeoutMs)
-          ),
-        ]);
-      }
-      return result;
-    } catch (error) {
-      throw new Error(
-        `Execution failed: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
+      worker.on("message", (msg: { result?: unknown; error?: string }) => {
+        clearTimeout(timer);
+        worker.terminate();
+        if (msg.error !== undefined) {
+          reject(new Error(`Execution failed: ${msg.error}`));
+        } else {
+          resolve(msg.result);
+        }
+      });
+
+      worker.on("error", (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
   }
 }

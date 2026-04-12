@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { Synthesizer } from "./synthesizer.js";
@@ -19,10 +20,78 @@ const approvals = new ApprovalQueue();
 const sandbox = new Sandbox();
 const synthesizer = new Synthesizer(config.apiKey, config.baseUrl, config.model);
 
+// Track dynamically registered tools for enable/remove lifecycle
+const dynamicTools = new Map<string, RegisteredTool>();
+
 const server = new McpServer({
   name: "jit-tool-synthesis",
   version: "3.0.0",
 });
+
+// --- Dynamic tool registration helpers ---
+
+function jsonSchemaToZodShape(schema: Record<string, unknown>): Record<string, z.ZodTypeAny> {
+  const properties = (schema.properties || {}) as Record<string, Record<string, unknown>>;
+  const required = (schema.required || []) as string[];
+  const shape: Record<string, z.ZodTypeAny> = {};
+
+  for (const [key, prop] of Object.entries(properties)) {
+    let zodType: z.ZodTypeAny;
+    switch (prop.type) {
+      case "string":  zodType = z.string();  break;
+      case "number":
+      case "integer": zodType = z.number();  break;
+      case "boolean": zodType = z.boolean(); break;
+      case "array":   zodType = z.array(z.unknown()); break;
+      case "object":  zodType = z.record(z.string(), z.unknown()); break;
+      default:        zodType = z.unknown(); break;
+    }
+    if (typeof prop.description === "string") zodType = zodType.describe(prop.description);
+    if (!required.includes(key)) zodType = zodType.optional() as z.ZodTypeAny;
+    shape[key] = zodType;
+  }
+  return shape;
+}
+
+function registerGeneratedTool(tool: GeneratedTool): void {
+  // Remove existing registration if present (re-approve scenario)
+  if (dynamicTools.has(tool.name)) {
+    dynamicTools.get(tool.name)!.remove();
+    dynamicTools.delete(tool.name);
+  }
+
+  const shape = jsonSchemaToZodShape(tool.inputSchema);
+
+  const registered = server.registerTool(
+    tool.name,
+    {
+      title: tool.name,
+      description: tool.description + " [generated]",
+      inputSchema: shape,
+    },
+    async (params) => {
+      try {
+        const result = await sandbox.execute(tool.handlerCode, params as Record<string, unknown>);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Execution failed: ${error instanceof Error ? error.message : String(error)}`,
+          }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  dynamicTools.set(tool.name, registered);
+}
+
+// Register all persisted tools at startup
+for (const tool of registry.loadAll()) {
+  registerGeneratedTool(tool);
+}
 
 // --- Meta-tools ---
 
@@ -85,7 +154,7 @@ server.registerTool(
   "approve_tool",
   {
     title: "Approve a synthesized tool",
-    description: "Activate a pending tool so it can be executed. Use list_pending to see available tools.",
+    description: "Activate a pending tool so it can be executed. Registers it as a first-class MCP tool. Use list_pending to see available tools.",
     inputSchema: {
       tool_name: z.string().describe("Name of the pending tool to approve"),
     },
@@ -99,10 +168,11 @@ server.registerTool(
       };
     }
     registry.save(pending);
+    registerGeneratedTool(pending);
     return {
       content: [{
         type: "text",
-        text: `Tool "${tool_name}" is now active. Call execute_tool with tool_name="${tool_name}" and the appropriate params to use it.`,
+        text: `Tool "${tool_name}" is now active and registered as an MCP tool. You can call it directly or use execute_tool.`,
       }],
     };
   }
@@ -250,13 +320,17 @@ server.registerTool(
   "remove_tool",
   {
     title: "Remove a generated tool",
-    description: "Permanently delete an approved tool from the registry.",
+    description: "Permanently delete an approved tool from the registry and unregister it as an MCP tool.",
     inputSchema: {
       tool_name: z.string().describe("Name of the tool to remove"),
     },
   },
   async ({ tool_name }) => {
     const removed = registry.remove(tool_name);
+    if (dynamicTools.has(tool_name)) {
+      dynamicTools.get(tool_name)!.remove();
+      dynamicTools.delete(tool_name);
+    }
     return {
       content: [{
         type: "text",
@@ -323,17 +397,16 @@ server.registerTool(
     },
   },
   async ({ base_url, model }) => {
-    const current = configManager.get();
     const newConfig: any = {};
     if (base_url) newConfig.baseUrl = base_url;
     if (model) newConfig.model = model;
-    
+
     configManager.set(newConfig);
-    
+
     // Recreate synthesizer with new config
     const newCfg = configManager.get();
     synthesizer.updateConfig(newCfg.apiKey, newCfg.baseUrl, newCfg.model);
-    
+
     return {
       content: [{
         type: "text",
