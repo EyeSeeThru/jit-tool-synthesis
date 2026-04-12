@@ -35,7 +35,7 @@ This system generates TypeScript tools dynamically using an LLM, requires human 
 This tool works with **any** OpenAI-compatible LLM API:
 
 - **OpenRouter** — 100+ models (Claude, GPT, Llama, etc.)
-- **OpenAI** — GPT-5.4, Codex 5.3
+- **OpenAI** — GPT-4o, o3, etc.
 - **Ollama** — Local models (Llama, Qwen, etc.)
 - **LM Studio** — Local models with GUI
 - **Groq** — Fast inference
@@ -78,11 +78,62 @@ LLM_MODEL=llama-3.1-70b-versatile
 
 ## Usage
 
-### Start the MCP Server
+### Build
 
 ```bash
 npm run build
-node dist/server.js
+```
+
+### Test with MCP Inspector
+
+The fastest way to verify everything works:
+
+```bash
+npx @modelcontextprotocol/inspector node dist/server.js
+```
+
+### Connect to MCP Clients
+
+This server works with **any** MCP client. Example configs:
+
+**Claude Desktop** — add to your Claude Desktop MCP settings:
+```json
+{
+  "mcpServers": {
+    "jit-tool-synthesis": {
+      "command": "node",
+      "args": ["/absolute/path/to/jit-tool-synthesis/dist/server.js"],
+      "env": {
+        "LLM_API_KEY": "your-api-key",
+        "LLM_BASE_URL": "https://openrouter.ai/api/v1",
+        "LLM_MODEL": "anthropic/claude-3-5-sonnet-20241022"
+      }
+    }
+  }
+}
+```
+
+**Claude Code:**
+```bash
+claude mcp add jit-tools node /absolute/path/to/jit-tool-synthesis/dist/server.js
+```
+
+**VS Code (Copilot):**
+```bash
+code --add-mcp '{"name":"jit-tools","type":"stdio","command":"node","args":["/absolute/path/to/jit-tool-synthesis/dist/server.js"]}'
+```
+
+**Cursor** — add to `.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "jit-tools": {
+      "command": "node",
+      "args": ["/absolute/path/to/jit-tool-synthesis/dist/server.js"],
+      "env": { "LLM_API_KEY": "your-api-key" }
+    }
+  }
+}
 ```
 
 ### Runtime Configuration
@@ -102,6 +153,7 @@ set_config model=openai/gpt-4o
 | Tool | Description |
 |------|-------------|
 | `synthesize_tool` | Generate a new tool from natural language |
+| `test_tool` | Test a pending tool with sample params before approval |
 | `approve_tool` | Activate a pending tool |
 | `reject_tool` | Discard a pending tool |
 | `execute_tool` | Run an approved tool |
@@ -114,11 +166,12 @@ set_config model=openai/gpt-4o
 
 ## Workflow
 
-1. **Request** — User asks for a tool (e.g., "create a weather fetcher")
+1. **Request** — User asks for a tool (e.g., "create a color converter")
 2. **Synthesize** — LLM generates tool code
-3. **Approve** — Human reviews and approves the code
-4. **Execute** — Tool runs in sandboxed environment
-5. **Store** — Approved tools persist in registry
+3. **Test** — Validate with sample params before committing
+4. **Approve** — Human reviews and approves the code
+5. **Execute** — Tool runs in sandboxed environment
+6. **Store** — Approved tools persist across sessions
 
 ## Environment Variables
 
