@@ -393,7 +393,7 @@ server.registerTool(
     description: "Change the LLM provider, model, or base URL at runtime. Changes take effect immediately.",
     inputSchema: {
       base_url: z.string().optional().describe("Base URL, e.g. https://openrouter.ai/api/v1"),
-      model: z.string().optional().describe("Model name, e.g. anthropic/claude-3-5-sonnet-20241022"),
+      model: z.string().optional().describe("Model name, e.g. anthropic/claude-sonnet-4-6"),
     },
   },
   async ({ base_url, model }) => {

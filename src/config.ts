@@ -36,7 +36,7 @@ class ConfigManager {
     return {
       apiKey: process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || "",
       baseUrl: fileConfig.baseUrl || process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1",
-      model: fileConfig.model || process.env.LLM_MODEL || process.env.SYNTHESIZER_MODEL || "anthropic/claude-3-5-sonnet-20241022",
+      model: fileConfig.model || process.env.LLM_MODEL || process.env.SYNTHESIZER_MODEL || "anthropic/claude-sonnet-4-6",
     };
   }
 

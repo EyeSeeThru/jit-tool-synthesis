@@ -59,21 +59,21 @@ Edit `.env` with your provider details:
 # Option 1: OpenRouter (default - 100+ models)
 LLM_API_KEY=your-openrouter-key
 LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_MODEL=anthropic/claude-4-5-sonnet
+LLM_MODEL=anthropic/claude-sonnet-4-6
 
 # Option 2: OpenAI direct
 LLM_API_KEY=sk-...
 LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL=gpt-4o
+LLM_MODEL=gpt-5.4
 
 # Option 3: Ollama (local)
 LLM_BASE_URL=http://localhost:11434/v1
-LLM_MODEL=llama3.1
+LLM_MODEL=llama-3.3
 
 # Option 4: Groq
 LLM_API_KEY=gsk_...
 LLM_BASE_URL=https://api.groq.com/openai/v1
-LLM_MODEL=llama-3.1-70b-versatile
+LLM_MODEL=llama-3.3-70b-versatile
 ```
 
 ## Usage
@@ -106,7 +106,7 @@ This server works with **any** MCP client. Example configs:
       "env": {
         "LLM_API_KEY": "your-api-key",
         "LLM_BASE_URL": "https://openrouter.ai/api/v1",
-        "LLM_MODEL": "anthropic/claude-3-5-sonnet-20241022"
+        "LLM_MODEL": "anthropic/claude-sonnet-4-6"
       }
     }
   }
@@ -145,7 +145,7 @@ You can change the LLM provider without restarting:
 get_config
 
 # Change model at runtime
-set_config model=openai/gpt-4o
+set_config model=openai/gpt-5.4
 ```
 
 ## MCP Tools
@@ -179,7 +179,7 @@ set_config model=openai/gpt-4o
 |----------|-------------|---------|
 | `LLM_API_KEY` | API key for your provider | (required for cloud) |
 | `LLM_BASE_URL` | API endpoint | https://openrouter.ai/api/v1 |
-| `LLM_MODEL` | Model to use | anthropic/claude-3-5-sonnet-20241022 |
+| `LLM_MODEL` | Model to use | anthropic/claude-sonnet-4-6 |
 
 Also supported (legacy): `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `SYNTHESIZER_MODEL`
 
